@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,8 +15,13 @@ import (
 )
 
 const (
-	RateLimit = time.Duration(7.2 * float32(time.Second)) // https://api.wikimedia.org/wiki/Rate_limits
-	BaseUrl   = "https://en.wikipedia.org/wiki/"
+	HourSecs = 3600
+
+	AnonRateLimit = 500  // https://api.wikimedia.org/wiki/Rate_limits#Anonymous_requests
+	ApiRateLimit  = 5000 // https://api.wikimedia.org/wiki/Rate_limits#Personal_requests
+
+	AnonArticleUrl = "https://en.wikipedia.org/wiki/"
+	ApiArticleUrl  = "https://en.wikipedia.org/w/rest.php/v1/page/%s/html"
 )
 
 type Node struct {
@@ -28,27 +34,62 @@ type Result struct {
 	Err  error
 }
 
-func scanPath(end string, visited *map[string]struct{}, node *Node, mu *sync.Mutex, prevRequest *time.Time, rateLimitMu *sync.Mutex, done chan Result) {
-	fmt.Println(node.Value)
+type ScanArticleArgs struct {
+	End         string
+	Visited     *map[string]struct{}
+	Node        *Node
+	Mu          *sync.Mutex
+	PrevRequest *time.Time
+	RateLimitMu *sync.Mutex
+	Done        chan Result
+	Verbose     bool
+	ApiToken    string
+	ReqWait     time.Duration
+	Auth        bool
+	Prefix      string
+}
 
-	rateLimitMu.Lock()
-	time.Sleep(RateLimit - time.Since(*prevRequest))
-	(*prevRequest) = time.Now()
-	rateLimitMu.Unlock()
+func scanArticle(a ScanArticleArgs) {
+	if a.Verbose {
+		fmt.Println(a.Node.Value)
+	}
 
-	resp, err := http.Get(BaseUrl + node.Value)
+	var url string
+
+	if a.Auth {
+		url = fmt.Sprintf(ApiArticleUrl, a.Node.Value)
+	} else {
+		url = AnonArticleUrl + a.Node.Value
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		done <- Result{nil, err}
+		a.Done <- Result{nil, err}
+		return
+	}
+
+	if a.Auth {
+		req.Header.Add("Authorization", "Bearer "+a.ApiToken)
+	}
+
+	a.RateLimitMu.Lock()
+	time.Sleep(a.ReqWait - time.Since(*a.PrevRequest))
+	(*a.PrevRequest) = time.Now()
+	a.RateLimitMu.Unlock()
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		a.Done <- Result{nil, err}
 		return
 	}
 
 	doc, err := html.Parse(resp.Body)
 	if err != nil {
 		resp.Body.Close()
-		done <- Result{nil, err}
+		a.Done <- Result{nil, err}
 		return
 	}
-
 	resp.Body.Close()
 
 	htmlNodes := []*html.Node{doc}
@@ -62,26 +103,29 @@ func scanPath(end string, visited *map[string]struct{}, node *Node, mu *sync.Mut
 				if attr.Key == "href" {
 					href := attr.Val
 
-					if strings.HasPrefix(href, "/wiki/") {
-						name := strings.TrimPrefix(href, "/wiki/")
+					if strings.HasPrefix(href, a.Prefix) {
+						name := strings.TrimPrefix(href, a.Prefix)
 						if idx := strings.Index(name, "#"); idx != -1 {
 							name = name[:idx]
 						}
 
 						if name != "Main_Page" && !strings.Contains(name, ":") {
-							newNode := Node{node, name}
+							newNode := &Node{a.Node, name}
 
-							mu.Lock()
+							a.Mu.Lock()
 
-							if name == end {
-								done <- Result{&newNode, nil}
+							if name == a.End {
+								a.Done <- Result{newNode, nil}
 								return
-							} else if _, ok := (*visited)[name]; !ok {
-								(*visited)[name] = struct{}{}
-								go scanPath(end, visited, &newNode, mu, prevRequest, rateLimitMu, done)
+							} else if _, ok := (*a.Visited)[name]; !ok {
+								(*a.Visited)[name] = struct{}{}
+
+								newArgs := a
+								newArgs.Node = newNode
+								go scanArticle(newArgs)
 							}
 
-							mu.Unlock()
+							a.Mu.Unlock()
 						}
 					}
 				}
@@ -94,7 +138,7 @@ func scanPath(end string, visited *map[string]struct{}, node *Node, mu *sync.Mut
 	}
 }
 
-func findPath(start string, end string) Result {
+func findPath(start string, end string, verbose bool, apiToken string) Result {
 	visited := make(map[string]struct{})
 	visited[start] = struct{}{}
 
@@ -104,9 +148,27 @@ func findPath(start string, end string) Result {
 	mu := sync.Mutex{}
 	rateLimitMu := sync.Mutex{}
 
-	prevRequest := time.Now().Add(-RateLimit)
+	var rateLimit int
+	var auth bool
+	var prefix string
 
-	go scanPath(end, &visited, &node, &mu, &prevRequest, &rateLimitMu, done)
+	if apiToken != "" {
+		rateLimit = ApiRateLimit
+		auth = true
+		prefix = "./"
+	} else {
+		rateLimit = AnonRateLimit
+		auth = false
+		prefix = "/wiki/"
+	}
+
+	reqWait := time.Duration((float32(HourSecs) / float32(rateLimit)) * float32(time.Second))
+
+	prevRequest := time.Now().Add(-reqWait)
+
+	a := ScanArticleArgs{end, &visited, &node, &mu, &prevRequest, &rateLimitMu, done, verbose, apiToken, reqWait, auth, prefix}
+
+	go scanArticle(a)
 
 	result := <-done
 
@@ -114,7 +176,30 @@ func findPath(start string, end string) Result {
 }
 
 func main() {
-	result := findPath(os.Args[1], os.Args[2])
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: ./wiki-path [flags] <start> <end>\n")
+
+		flag.PrintDefaults()
+	}
+
+	help := flag.Bool("h", false, "Show help message")
+	verbose := flag.Bool("v", false, "Print all articles that will be visited")
+	apiToken := flag.String("t", "", "(Optional) API token for Wikipedia to increase the rate limit (https://api.wikimedia.org/wiki/Authentication#Personal_API_tokens)")
+
+	flag.Parse()
+
+	if *help {
+		flag.Usage()
+		os.Exit(0)
+	}
+
+	args := flag.Args()
+
+	startTime := time.Now()
+	result := findPath(args[0], args[1], *verbose, *apiToken)
+	endTime := time.Now()
+
+	elapsed := endTime.Sub(startTime)
 
 	node := result.Node
 	err := result.Err
@@ -132,6 +217,7 @@ func main() {
 
 	slices.Reverse(path)
 
-	fmt.Println(path)
-	fmt.Println(len(path))
+	fmt.Printf("Path: %s\n", path)
+	fmt.Printf("Length: %d\n", len(path))
+	fmt.Printf("Took %s\n", elapsed)
 }

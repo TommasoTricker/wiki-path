@@ -1,11 +1,16 @@
 Finds the sequence of linked Wikipedia articles required to navigate from one article to another.
 
+Example usage:
 ```shell
 go build
-./wiki-path Donald_Trump Ziggurat #last part of the url
+./wiki-path Donald_Trump Ziggurat # final part of the url
 ```
+
 Output:
 ```
-[Donald_Trump Iran Ziggurat]
-3
+Path: [Donald_Trump Iran Ziggurat]
+Length: 3
+Took 12m24.7296545s
 ```
+
+Run `./wiki-path -h` for more options.

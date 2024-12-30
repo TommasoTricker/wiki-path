@@ -2,7 +2,7 @@ Finds the sequence of linked Wikipedia articles required to navigate from one ar
 
 Example usage:
 ```shell
-go build
+go install github.com/TommasoTricker/wiki-path
 wiki-path Donald_Trump Ziggurat # final part of the url
 ```
 

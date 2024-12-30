@@ -177,7 +177,8 @@ func findPath(start string, end string, verbose bool, apiToken string) Result {
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: ./wiki-path [flags] <start> <end>\n")
+		fmt.Fprintln(os.Stderr, "Usage: wiki-path [options] <start> <end>")
+		fmt.Fprintln(os.Stderr, "Options:")
 
 		flag.PrintDefaults()
 	}

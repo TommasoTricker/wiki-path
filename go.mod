@@ -1,4 +1,4 @@
-module example.com/wiki-path
+module github.com/TommasoTricker/wiki-path
 
 go 1.23
 

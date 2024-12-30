@@ -3,7 +3,7 @@ Finds the sequence of linked Wikipedia articles required to navigate from one ar
 Example usage:
 ```shell
 go build
-./wiki-path Donald_Trump Ziggurat # final part of the url
+wiki-path Donald_Trump Ziggurat # final part of the url
 ```
 
 Output:
@@ -13,4 +13,4 @@ Length: 3
 Took 12m24.7296545s
 ```
 
-Run `./wiki-path -h` for more options.
+Run `wiki-path -h` for more options.

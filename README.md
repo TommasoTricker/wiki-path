@@ -1,7 +1,7 @@
 Example usage:
 ```shell
-cargo install --git github.com/TommasoTricker/wiki-path
-wiki-path Teletubbies Adolf_Hitler # final part of the url
+cargo install --git https://github.com/TommasoTricker/wiki-path
+wiki-path path Teletubbies Adolf_Hitler # final part of the url
 ```
 
 Output:

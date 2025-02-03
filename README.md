@@ -1,16 +1,12 @@
-Finds the sequence of linked Wikipedia articles required to navigate from one article to another.
-
 Example usage:
 ```shell
-go install github.com/TommasoTricker/wiki-path@latest
-wiki-path Donald_Trump Ziggurat # final part of the url
+cargo install --git github.com/TommasoTricker/wiki-path
+wiki-path Teletubbies Adolf_Hitler # final part of the url
 ```
 
 Output:
 ```
-Path: [Donald_Trump Iran Ziggurat]
+Path: ["Teletubbies", "Hamburg", "Adolf_Hitler"]
 Length: 3
-Took 12m24.7296545s
+Took 2m 1s 622ms 600µs 500ns
 ```
-
-Run `wiki-path -h` for more options.

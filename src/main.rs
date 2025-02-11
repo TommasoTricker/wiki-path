@@ -94,50 +94,47 @@ fn main() {
             };
 
             let document = sc::Html::parse_document(&body);
-            let selector = sc::Selector::parse("*").unwrap();
+            let selector = sc::Selector::parse("a[href]").unwrap();
 
             for element in document.select(&selector) {
-                if element.value().name() == "a" {
-                    if let Some(href) = element.value().attr("href") {
-                        if let Some(mut name) = href.strip_prefix("/wiki/") {
-                            // Remove #fragments
-                            if let Some(idx) = name.find('#') {
-                                name = &name[..idx];
-                            }
-                            // Exclude "Main_Page" or Special: / Talk: etc
-                            if name != "Main_Page" && !name.contains(':') {
-                                let new_article = name.to_string();
+                if let Some(href) = element.value().attr("href") {
+                    if let Some(mut name) = href.strip_prefix("/wiki/") {
+                        // Remove #fragments
+                        if let Some(idx) = name.find('#') {
+                            name = &name[..idx];
+                        }
+                        // Exclude "Main_Page" or Special: / Talk: etc
+                        if name != "Main_Page" && !name.contains(':') {
+                            let new_article = name.to_string();
 
-                                if !articles.contains(&new_article) {
-                                    articles.push(new_article);
-                                    article_parent.insert(articles.len() - 1, curr_idx);
+                            if !articles.contains(&new_article) {
+                                articles.push(new_article);
+                                article_parent.insert(articles.len() - 1, curr_idx);
 
-                                    next_level_len += 1;
+                                next_level_len += 1;
 
-                                    if name == c.end {
-                                        let elapsed = start_time.elapsed();
+                                if name == c.end {
+                                    let elapsed = start_time.elapsed();
 
-                                        let mut path = Vec::new();
+                                    let mut path = Vec::new();
 
-                                        let mut current = articles.len() - 1;
-                                        while current != 0 {
-                                            path.push(&articles[current]);
-                                            current = article_parent[&current];
-                                        }
+                                    let mut current = articles.len() - 1;
+                                    while current != 0 {
+                                        path.push(&articles[current]);
+                                        current = article_parent[&current];
+                                    }
 
-                                        path.reverse();
+                                    path.reverse();
 
-                                        println!("Path: {:?}", path);
-                                        println!("Length: {}", path.len());
+                                    println!("Path: {:?}", path);
+                                    println!("Length: {}", path.len());
 
-                                        let elapsed_sdur = jiff::SignedDuration::from_secs_f64(
-                                            elapsed.as_secs_f64(),
-                                        );
-                                        println!("Took {elapsed_sdur:#}");
+                                    let elapsed_sdur =
+                                        jiff::SignedDuration::from_secs_f64(elapsed.as_secs_f64());
+                                    println!("Took {elapsed_sdur:#}");
 
-                                        if !c.all {
-                                            return;
-                                        }
+                                    if !c.all {
+                                        return;
                                     }
                                 }
                             }

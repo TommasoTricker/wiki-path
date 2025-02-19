@@ -80,7 +80,7 @@ fn main() {
             let res = match request.send() {
                 Ok(res) => res,
                 Err(err) => {
-                    eprintln!("Error GET-ing {}: {}", url, err);
+                    eprintln!("{}", err);
                     continue;
                 }
             };
@@ -88,7 +88,7 @@ fn main() {
             let body = match res.text() {
                 Ok(body) => body,
                 Err(err) => {
-                    eprintln!("Error reading response body of {}: {}", url, err);
+                    eprintln!("{}", err);
                     continue;
                 }
             };
